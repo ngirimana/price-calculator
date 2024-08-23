@@ -1,51 +1,59 @@
 package prices
 
 import (
-	"bufio"
 	"fmt"
-	"os"
+
+	"example.com/price-calculator/conversion"
+	ioManager "example.com/price-calculator/iomanager"
 )
 
 type TaxIncludePriceJob struct {
-	TaxRate          float64
-	InputPrices      []float64
-	TaxIncludePrices map[string]float64
+	IOManager        ioManager.IOManager `json:"-"`
+	TaxRate          float64             `json:"tax_rate"`
+	InputPrices      []float64           `json:"input_prices"`
+	TaxIncludePrices map[string]string   `json:"tax_include_prices"`
 }
 
-func (job TaxIncludePriceJob) LoadData() {
-	file, err := os.Open("prices.txt")
+func (job *TaxIncludePriceJob) LoadData() error {
+	lines, err := job.IOManager.ReadLines()
+
 	if err != nil {
-		fmt.Println("cannot open file")
 		fmt.Println(err)
-		return
+		return err
 	}
-	scanner := bufio.NewScanner(file)
-	var lines []string
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	err = scanner.Err()
+
+	prices, err := conversion.StringToFloat(lines)
+
 	if err != nil {
-		fmt.Println("Reading the file failed.")
+
 		fmt.Println(err)
-		file.Close()
-		return
+		return err
 	}
-	
+	job.InputPrices = prices
+	return nil
 
 }
-func (job TaxIncludePriceJob) Process() {
-	results := make(map[string]float64)
+
+func (job *TaxIncludePriceJob) Process() error {
+	err := job.LoadData()
+	if err != nil {
+		return err
+	}
+	results := make(map[string]string)
 
 	for _, price := range job.InputPrices {
-		results[fmt.Sprintf("%.2f", price)] = price * (1 + job.TaxRate)
+		taxIncludedPrice := price * (1 + job.TaxRate)
+		results[fmt.Sprintf("%.2f", price)] = fmt.Sprintf("%.2f", taxIncludedPrice)
 	}
+	job.TaxIncludePrices = results
 
-	fmt.Println(results)
+	return job.IOManager.WriteJSON(job)
+
 }
 
-func NewTaxIncludePriceJob(taxRate float64) *TaxIncludePriceJob {
+func NewTaxIncludePriceJob(iom ioManager.IOManager, taxRate float64) *TaxIncludePriceJob {
 	return &TaxIncludePriceJob{
+		IOManager:   iom,
 		InputPrices: []float64{10, 20, 30},
 		TaxRate:     taxRate,
 	}
